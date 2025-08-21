@@ -2,116 +2,168 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 const generateGrid = (size) => {
-  return Array.from({ length: size }, () => Array.from({ length: size }, () => "empty"));
+  return Array.from({ length: size }, () =>
+    Array.from({ length: size }, () => "empty")
+  );
 };
 
-const getRandomPattern = (size, level, maxLevelBoxes) => {
+// ✅ Now accepts size and boxesToSelect so we can control difficulty
+const getRandomPattern = (size, boxesToSelect) => {
   const pattern = new Set();
-  // Increase boxes with level, cap at maxLevelBoxes
-  const boxesToSelect = Math.min(level + 2, maxLevelBoxes);
-
   while (pattern.size < boxesToSelect) {
     const x = Math.floor(Math.random() * size);
     const y = Math.floor(Math.random() * size);
-    pattern.add(`${x}-${y}`);
+    pattern.add(`${x},${y}`);
   }
-
-  return pattern;
+  return Array.from(pattern).map((str) => str.split(",").map(Number));
 };
 
-export default function MemoryGame() {
-  const [level, setLevel] = useState(1);
-  const [gridSize, setGridSize] = useState(3);
-  const [pattern, setPattern] = useState(new Set());
-  const [grid, setGrid] = useState([]);
-  const [selected, setSelected] = useState(new Set());
-  const [gameActive, setGameActive] = useState(true);
+export default function MemoryMatrix() {
   const navigate = useNavigate();
+  const [level, setLevel] = useState(3); // starts from 3x3
+  const [grid, setGrid] = useState(generateGrid(3));
+  const [pattern, setPattern] = useState([]);
+  const [userPattern, setUserPattern] = useState([]);
+  const [showPattern, setShowPattern] = useState(true);
+  const [showRules, setShowRules] = useState(false);
+
+  const maxLevel = 15;
+  const gridSize = level < 8 ? level : 8; // ✅ After level 8 grid size stays 8x8
+  const boxesToSelect = Math.min(level + 1, gridSize * gridSize); // ✅ Boxes increase each level
 
   useEffect(() => {
-    // Increase grid size till level 7, then fix size
-    const size = level < 8 ? Math.min(3 + level, 8) : 8;
-    setGridSize(size);
-
-    // Max 10 boxes per level or less if grid too small
-    const maxBoxes = Math.min(size * size, 10);
-    const newPattern = getRandomPattern(size, level, maxBoxes);
-
-    setGrid(generateGrid(size));
-    setPattern(newPattern);
-    setSelected(new Set());
+    startNewLevel();
   }, [level]);
 
+  const startNewLevel = () => {
+    const newPattern = getRandomPattern(gridSize, boxesToSelect);
+    setPattern(newPattern);
+    setUserPattern([]);
+    setGrid(generateGrid(gridSize));
+
+    // Show highlighted pattern
+    const tempGrid = generateGrid(gridSize);
+    newPattern.forEach(([x, y]) => {
+      tempGrid[x][y] = "blue";
+    });
+    setGrid(tempGrid);
+
+    setShowPattern(true);
+    setTimeout(() => {
+      setShowPattern(false);
+      setGrid(generateGrid(gridSize));
+    }, Math.max(1000, level * 800)); // Slightly faster levels but always at least 1 sec
+  };
+
   const handleClick = (x, y) => {
-    if (!gameActive) return;
+    if (showPattern) return;
+    if (userPattern.some(([ux, uy]) => ux === x && uy === y)) return;
 
-    const cellId = `${x}-${y}`;
-    if (!pattern.has(cellId)) {
-      // Wrong click → Lose page
-      setGameActive(false);
-      navigate("/memory-game/lose", { state: { level } });
-      return;
-    }
+    const isCorrect = pattern.some(([px, py]) => px === x && py === y);
+    const newGrid = grid.map((row) => [...row]);
 
-    const newSelected = new Set(selected);
-    newSelected.add(cellId);
-    setSelected(newSelected);
+    if (isCorrect) {
+      newGrid[x][y] = "blue";
+      const newUserPattern = [...userPattern, [x, y]];
+      setUserPattern(newUserPattern);
+      setGrid(newGrid);
 
-    if (newSelected.size === pattern.size) {
-      // Win this level
-      if (level === 15) {
-        setGameActive(false);
-        navigate("/memory-game/win", { state: { level } });
-      } else {
-        setLevel(level + 1);
+      if (newUserPattern.length === pattern.length) {
+        if (level >= maxLevel) {
+          navigate("/memory-matrix/result", {
+            state: { isWin: true, flips: level - 2 },
+          });
+        } else {
+          setLevel((prev) => prev + 1);
+        }
       }
+    } else {
+      newGrid[x][y] = "red";
+      setGrid(newGrid);
+      setTimeout(() => {
+        navigate("/memory-matrix/result", {
+          state: { isWin: false, flips: level - 2 },
+        });
+      }, 1000);
     }
   };
 
   return (
-    <div
-      className="flex flex-col items-center justify-center min-h-screen"
-      style={{
-        gap: "10px",
-        padding: "20px",
-      }}
-    >
-      <h1 className="text-white text-2xl mb-4">Level {level}</h1>
+    <div className="bg-gray-900 text-white min-h-screen flex flex-col items-center px-3 py-4 sm:px-6 sm:py-6">
+      {/* Header Row */}
+      <div className="w-full flex justify-between items-center mb-4 sm:mb-6">
+        <button
+          onClick={() => navigate("/")}
+          className="text-xs sm:text-sm md:text-base flex items-center gap-1 hover:text-blue-400"
+        >
+          ← Back
+        </button>
+        <button
+          onClick={() => setShowRules(true)}
+          className="border border-gray-400 px-2 sm:px-3 py-1 text-xs sm:text-sm md:text-base rounded-lg hover:bg-gray-700 transition"
+        >
+          Rules
+        </button>
+      </div>
 
-      {/* Responsive grid */}
+      {/* Title */}
+      <h1 className="text-xl sm:text-2xl md:text-4xl font-bold mb-1 sm:mb-2">
+        Memory Matrix
+      </h1>
+      <p className="mb-4 sm:mb-6 text-xs sm:text-sm md:text-lg">
+        Level - {level - 2}
+      </p>
+
+      {/* Grid */}
       <div
-        className="grid"
+        className="grid gap-1 sm:gap-2 md:gap-3"
         style={{
           gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
-          gap: "8px",
           width: "90vw",
-          maxWidth: "600px",
+          maxWidth: "500px", // ✅ Grid always fits in screen
         }}
       >
-        {Array.from({ length: gridSize }).map((_, row) =>
-          Array.from({ length: gridSize }).map((_, col) => {
-            const cellId = `${row}-${col}`;
-            const isSelected = selected.has(cellId);
-            const isPattern = pattern.has(cellId);
-
-            return (
-              <div
-                key={cellId}
-                onClick={() => handleClick(row, col)}
-                className={`cursor-pointer border rounded-lg ${
-                  isSelected ? "bg-green-500" : "bg-gray-700"
+        {grid.map((row, x) =>
+          row.map((cell, y) => (
+            <div
+              key={`${x}-${y}`}
+              onClick={() => handleClick(x, y)}
+              className={`aspect-square rounded-md cursor-pointer transition 
+                ${
+                  cell === "blue"
+                    ? "bg-blue-500"
+                    : cell === "red"
+                    ? "bg-red-500"
+                    : "bg-gray-300 hover:bg-gray-500"
                 }`}
-                style={{
-                  aspectRatio: "1 / 1", 
-                  transition: "0.3s",
-                  opacity: isPattern && !isSelected ? 0.7 : 1,
-                }}
-              />
-            );
-          })
+            />
+          ))
         )}
       </div>
+
+      {/* Rules Modal */}
+      {showRules && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 z-50">
+          <div className="bg-white text-black rounded-xl shadow-xl p-6 w-11/12 max-w-md relative">
+            <h2 className="text-2xl font-bold mb-4 text-center">Game Rules</h2>
+            <ul className="list-disc list-inside space-y-2 text-sm sm:text-base">
+              <li>Each level starts with a Grid (N x N), beginning from 3x3.</li>
+              <li>The game highlights <b>boxes</b> in <b>blue</b> to memorize.</li>
+              <li>They remain visible for some seconds — memorize them!</li>
+              <li>After that, the grid resets. Now click the cells.</li>
+              <li>Correct cells turn <b>blue</b>. Wrong clicks turn <b>red</b> and end the game.</li>
+              <li>Guess all correctly to advance to the next level.</li>
+              <li>Reach the final level to win 🎉.</li>
+            </ul>
+            <button
+              onClick={() => setShowRules(false)}
+              className="absolute top-3 right-3 text-xl font-bold text-gray-700 hover:text-red-500"
+            >
+              ✖
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-``
