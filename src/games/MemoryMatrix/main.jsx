@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import RequireAuth from "../../components/RequireAuth.jsx";
+import { storage, users, scores } from "../../lib/api.js";
 
 const generateGrid = (size) => {
   return Array.from({ length: size }, () =>
@@ -26,6 +28,13 @@ export default function MemoryMatrix() {
   const [userPattern, setUserPattern] = useState([]);
   const [showPattern, setShowPattern] = useState(true);
   const [showRules, setShowRules] = useState(false);
+  const [bestLevel, setBestLevel] = useState(null);
+
+  useEffect(() => {
+    const u = storage.getUsername();
+    if (!u) return;
+    users.get(u).then((d) => setBestLevel(d.data?.memoryMatrixHighScore || null)).catch(() => {});
+  }, []);
 
   const maxLevel = 15;
   const gridSize = level < 8 ? level : 8; // ✅ After level 8 grid size stays 8x8
@@ -55,6 +64,16 @@ export default function MemoryMatrix() {
     }, Math.max(1000, level * 800)); // Slightly faster levels but always at least 1 sec
   };
 
+  const pushHighLevelIfAny = (achieved) => {
+    const u = storage.getUsername();
+    if (!u) return;
+    const prev = bestLevel ?? 0;
+    if (achieved > prev) {
+      setBestLevel(achieved);
+      scores.update(u, 'memorymatrix', achieved).catch(() => {});
+    }
+  };
+
   const handleClick = (x, y) => {
     if (showPattern) return;
     if (userPattern.some(([ux, uy]) => ux === x && uy === y)) return;
@@ -69,9 +88,13 @@ export default function MemoryMatrix() {
       setGrid(newGrid);
 
       if (newUserPattern.length === pattern.length) {
+        // Level completed – update high level immediately
+        const achieved = level - 2;
+        pushHighLevelIfAny(achieved);
+
         if (level >= maxLevel) {
           navigate("/memory-matrix/result", {
-            state: { isWin: true, flips: level - 2 },
+            state: { isWin: true, flips: achieved },
           });
         } else {
           setLevel((prev) => prev + 1);
@@ -90,6 +113,7 @@ export default function MemoryMatrix() {
 
   return (
     <div className="bg-gray-900 text-white min-h-screen flex flex-col items-center px-3 py-4 sm:px-6 sm:py-6">
+      <RequireAuth />
       {/* Header Row */}
       <div className="w-full flex justify-between items-center mb-4 sm:mb-6">
         <button
@@ -98,12 +122,15 @@ export default function MemoryMatrix() {
         >
           ← Back
         </button>
-        <button
-          onClick={() => setShowRules(true)}
-          className="border border-gray-400 px-2 sm:px-3 py-1 text-xs sm:text-sm md:text-base rounded-lg hover:bg-gray-700 transition"
-        >
-          Rules
-        </button>
+        <div className="flex items-center gap-4">
+          <span className="text-sm">Best: {bestLevel ?? '-'} lvl</span>
+          <button
+            onClick={() => setShowRules(true)}
+            className="border border-gray-400 px-2 sm:px-3 py-1 text-xs sm:text-sm md:text-base rounded-lg hover:bg-gray-700 transition"
+          >
+            Rules
+          </button>
+        </div>
       </div>
 
       {/* Title */}

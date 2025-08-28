@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import cardsData from "../../components/CardsGameList";
 import { useNavigate } from "react-router-dom";
+import RequireAuth from "../../components/RequireAuth.jsx";
+import { storage, users, scores } from "../../lib/api.js";
 
 const shuffleArray = (array) => {
   const shuffled = [...array];
@@ -19,8 +21,8 @@ function Cards() {
   const [timer, setTimer] = useState(120);
   const [flipCount, setFlipCount] = useState(0);
   const [showRules, setShowRules] = useState(false);
+  const [bestTime, setBestTime] = useState(null);
 
-  // Setup cards
   useEffect(() => {
     const duplicated = [...cardsData, ...cardsData].map((card, index) => ({
       ...card,
@@ -29,7 +31,12 @@ function Cards() {
     setCards(shuffleArray(duplicated));
   }, []);
 
-  // Timer countdown + lose condition
+  useEffect(() => {
+    const u = storage.getUsername();
+    if (!u) return;
+    users.get(u).then((d) => setBestTime(d.data?.cardFlipGameHighScore || null)).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (timer > 0 && matched.length < cardsData.length) {
       const interval = setInterval(() => setTimer((t) => t - 1), 1000);
@@ -38,11 +45,10 @@ function Cards() {
 
     if (timer === 0) {
       // navigate to Result.jsx with lose state
-      navigate("/card-game/result", { state: { flips: flipCount, isWin: false } });
+      navigate("/cards-game/result", { state: { flips: flipCount, isWin: false } });
     }
   }, [timer, matched, navigate, flipCount]);
 
-  // Matching logic
   useEffect(() => {
     if (flipped.length === 2) {
       const [first, second] = flipped;
@@ -64,13 +70,23 @@ function Cards() {
     }
   };
 
-  // Win condition
   useEffect(() => {
     if (matched.length === cardsData.length) {
-      // navigate to Result.jsx with win state
-      navigate("/result", { state: { flips: flipCount, isWin: true } });
+      const u = storage.getUsername();
+      if (u) {
+        // Use time taken (120 - timer) as best time, lower is better
+        const timeTaken = 120 - timer;
+        const prev = bestTime ?? Infinity;
+        if (timeTaken < prev) {
+          setBestTime(timeTaken);
+          scores.update(u, 'cardflipgame', timeTaken).then(()=>{
+            window.dispatchEvent(new CustomEvent('mg-leaderboard-updated'));
+          }).catch(() => {});
+        }
+      }
+      navigate("/cards-game/result", { state: { flips: flipCount, isWin: true } });
     }
-  }, [matched, navigate, flipCount]);
+  }, [matched, navigate, flipCount, timer, bestTime]);
 
   const formatTime = (time) => {
     const minutes = String(Math.floor(time / 60)).padStart(2, "0");
@@ -88,6 +104,7 @@ function Cards() {
         backgroundPosition: "center",
       }}
     >
+      <RequireAuth />
       {/* Top Buttons */}
       <div className="absolute top-4 left-4">
         <button
@@ -114,6 +131,7 @@ function Cards() {
       <div className="flex justify-center gap-4 sm:gap-8 text-sm sm:text-lg font-semibold mb-4">
         <span>⏱ {formatTime(timer)}</span>
         <span>Flips: {flipCount}</span>
+        <span>Best: {bestTime ?? '-'}s</span>
         <span>Score: {matched.length}</span>
       </div>
 

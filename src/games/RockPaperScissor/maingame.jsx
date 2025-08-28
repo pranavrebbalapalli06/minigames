@@ -1,15 +1,33 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import RequireAuth from "../../components/RequireAuth.jsx";
+import { storage, users, scores } from "../../lib/api.js";
 
 export default function RockPaperScissors() {
   const [showRules, setShowRules] = useState(false);
+  const [bestScore, setBestScore] = useState(null);
   const navigate = useNavigate();
+
+  // Always start fresh when this screen is opened
+  useEffect(() => {
+    sessionStorage.setItem("rpsScore", "0");
+    return () => {
+      // Optional: ensure no lingering intermediate state
+      sessionStorage.removeItem("rpsScore");
+    };
+  }, []);
 
   const choices = [
     { name: "rock", image: "https://res.cloudinary.com/dje6kfwo1/image/upload/v1754199948/Group_6941_rih46j.png" },
     { name: "paper", image: "https://res.cloudinary.com/dje6kfwo1/image/upload/v1754199941/Paper_bkjuyb.png" },
     { name: "scissor", image: "https://res.cloudinary.com/dje6kfwo1/image/upload/v1754199918/Group_6940_fia58w.png" },
   ];
+
+  useEffect(() => {
+    const u = storage.getUsername();
+    if (!u) return;
+    users.get(u).then((d) => setBestScore(d.data?.rockPaperScissorHighScore || null)).catch(() => {});
+  }, []);
 
   // Handle back button navigation
   useEffect(() => {
@@ -34,18 +52,24 @@ export default function RockPaperScissors() {
       (choice.name === "scissor" && compChoice.name === "paper")
     ) {
       result = "win";
-      scoreChange = 1;
+      scoreChange = scoreChange + 1;
     } else {
       result = "lose";
-      scoreChange = -1;
+      scoreChange = scoreChange - 1;
     }
 
-    // Update score in sessionStorage
     const currentScore = parseInt(sessionStorage.getItem("rpsScore") || "0", 10);
     const updatedScore = currentScore + scoreChange;
-    sessionStorage.setItem("rpsScore", updatedScore);
+    sessionStorage.setItem("rpsScore", String(updatedScore));
 
-    // Pass simplified data to result page
+    const u = storage.getUsername();
+    if (u && (bestScore === null || updatedScore > bestScore)) {
+      setBestScore(updatedScore);
+      scores.update(u, 'rockpaperscissor', updatedScore).then(()=>{
+        window.dispatchEvent(new CustomEvent('mg-leaderboard-updated'));
+      }).catch(() => {});
+    }
+
     navigate("/rock-paper-scissor/result", {
       state: {
         result,
@@ -58,7 +82,7 @@ export default function RockPaperScissors() {
 
   return (
     <div className="bg-[#1e3555] min-h-screen flex flex-col items-center py-10 text-white relative">
-      
+      <RequireAuth />
       {/* Header */}
       <header className="absolute top-4 left-0 right-0 flex justify-between items-center px-6">
         <button
@@ -67,12 +91,15 @@ export default function RockPaperScissors() {
         >
           ← Back
         </button>
-        <button
-          onClick={() => setShowRules(true)}
-          className="border border-gray-400 px-2 sm:px-3 py-1 text-xs sm:text-sm md:text-base rounded-lg hover:bg-gray-700 transition"
-        >
-          Rules
-        </button>
+        <div className="flex items-center gap-4">
+          <span className="text-sm">Best: {bestScore ?? '-'} pts</span>
+          <button
+            onClick={() => setShowRules(true)}
+            className="border border-gray-400 px-2 sm:px-3 py-1 text-xs sm:text-sm md:text-base rounded-lg hover:bg-gray-700 transition"
+          >
+            Rules
+          </button>
+        </div>
       </header>
 
       {/* Title */}
