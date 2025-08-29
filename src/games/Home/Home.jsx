@@ -21,6 +21,21 @@ const badgeUrls = [
   "https://res.cloudinary.com/dje6kfwo1/image/upload/v1756445156/ChatGPT_Image_Aug_29_2025_10_55_44_AM_e74vrh.png",
 ];
 
+
+const useIsLargeScreen = (minWidth = 1024) => {
+  const [isLarge, setIsLarge] = useState(() => window.innerWidth >= minWidth);
+
+  useEffect(() => {
+    const handler = () => setIsLarge(window.innerWidth >= minWidth);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, [minWidth]);
+
+  return isLarge;
+};
+
+
+
 const parseScore = (v) => {
   // returns numeric value (seconds for mm:ss) or null if not numeric
   if (v === null || v === undefined || v === "") return null;
@@ -69,6 +84,7 @@ const Home = () => {
   const [tab, setTab] = useState("games");
   const [globalBoard, setGlobalBoard] = useState([]);
   const [gameBoard, setGameBoard] = useState({ game: "emojigame", rows: [] });
+  const isLargeScreen = useIsLargeScreen(1024);
 
   const games = [
     { key: "emojigame", label: "Emoji Game" },
@@ -121,7 +137,9 @@ const Home = () => {
     <div className="relative min-h-screen w-full overflow-hidden">
       <RequireAuth />
       <BackgroundBeamsWithCollision className="fixed inset-0 -z-10" />
-      <TargetCursor spinDuration={2} hideDefaultCursor={true} />
+      {isLargeScreen && tab !== "leaderboard" && (
+        <TargetCursor spinDuration={2} hideDefaultCursor={true} />
+      )}
 
       <div className="absolute top-4 right-4 z-10 bg-white/90 rounded-full px-4 py-2 shadow hover:shadow-xl transition">
         <UserMenu />
