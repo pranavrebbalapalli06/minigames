@@ -7,7 +7,7 @@ import RequireAuth from "../../components/RequireAuth.jsx";
 import { leaderboard } from "../../lib/api.js";
 import UserMenu from "../../components/UserMenu.jsx";
 
-/* --- minimal helpers --- */
+/* --- helpers --- */
 const scoreKeyFor = {
   emojigame: "emojiGameHighScore",
   memorymatrix: "memoryMatrixHighScore",
@@ -25,12 +25,13 @@ const parseScore = (v) => {
   if (v === null || v === undefined || v === "") return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
   const s = String(v).trim();
-  // mm:ss → seconds
+
+  // mm:ss → convert to seconds
   if (/^\d+:\d{1,2}$/.test(s)) {
     const [m, sec] = s.split(":").map(Number);
     if (!Number.isNaN(m) && !Number.isNaN(sec)) return m * 60 + sec;
   }
-  // remove non-numeric except dot and minus
+
   const cleaned = s.replace(/[^0-9.\-]/g, "");
   if (cleaned === "" || cleaned === "-" || cleaned === ".") return null;
   const n = Number(cleaned);
@@ -39,7 +40,7 @@ const parseScore = (v) => {
 
 const getScoreValue = (row, game) => {
   const key = scoreKeyFor[game];
-  if (row == null) return null;
+  if (!row) return null;
   if (row[key] !== undefined) return parseScore(row[key]);
   if (row.score !== undefined) return parseScore(row.score);
   for (const v of Object.values(row)) {
@@ -49,7 +50,7 @@ const getScoreValue = (row, game) => {
   return null;
 };
 
-// ✅ Smart sorter
+// ✅ Smart sorter with non-zero first for time-based games
 const sortByGame = (rows = [], game) =>
   [...rows].sort((a, b) => {
     const A = getScoreValue(a, game);
@@ -60,22 +61,22 @@ const sortByGame = (rows = [], game) =>
     if (B === null) return -1;
 
     if (game === "emojigame" || game === "cardflipgame") {
-      // push zeros to bottom
       if (A === 0 && B !== 0) return 1;
       if (B === 0 && A !== 0) return -1;
       return A - B; // ascending for non-zero
     }
 
-    // score-based → descending
-    return B - A;
+    return B - A; // descending for score-based
   });
 
 /* --- component --- */
 const Home = () => {
   const navigate = useNavigate();
   const [tab, setTab] = useState("games");
+
   const [globalBoard, setGlobalBoard] = useState([]);
-  const [gameBoard, setGameBoard] = useState({ game: "emojigame", rows: [] });
+  const [selectedGame, setSelectedGame] = useState("emojigame");
+  const [topRows, setTopRows] = useState([]);
 
   const games = [
     { key: "emojigame", label: "Emoji Game" },
@@ -88,38 +89,47 @@ const Home = () => {
   useEffect(() => {
     if (tab !== "leaderboard") return;
     let cancelled = false;
+
     leaderboard
       .all()
       .then((d) => {
         if (!cancelled) setGlobalBoard(d?.data ?? []);
       })
-      .catch(() => {});
-    return () => (cancelled = true);
+      .catch(() => {
+        if (!cancelled) setGlobalBoard([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [tab]);
 
-  // Fetch per-game leaderboard
+  // Fetch top players per game
   useEffect(() => {
     if (tab !== "leaderboard") return;
     let cancelled = false;
-    const g = gameBoard.game || "emojigame";
+
     leaderboard
-      .game(g, 100)
+      .game(selectedGame, 100)
       .then((d) => {
-        if (cancelled) return;
-        const rows = d?.data ?? [];
-        setGameBoard({ game: g, rows: sortByGame(rows, g) });
+        if (!cancelled) {
+          const rows = d?.data ?? [];
+          setTopRows(sortByGame(rows, selectedGame));
+        }
       })
       .catch(() => {
-        if (!cancelled) setGameBoard((p) => ({ ...p, rows: [] }));
+        if (!cancelled) setTopRows([]);
       });
-    return () => (cancelled = true);
-  }, [tab, gameBoard.game]);
 
-  const changeGame = (g) => setGameBoard((p) => ({ ...p, game: g, rows: [] }));
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, selectedGame]);
 
   const displayScore = (row, game) => {
     const key = scoreKeyFor[game];
-    if (row?.[key] !== undefined && row[key] !== null && row[key] !== "") return row[key];
+    if (row?.[key] !== undefined && row[key] !== null && row[key] !== "")
+      return row[key];
     const v = getScoreValue(row, game);
     return v === null ? "-" : v;
   };
@@ -146,7 +156,11 @@ const Home = () => {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-4 py-2 rounded-lg ${tab === t ? "bg-white text-black shadow" : "bg-white/30 text-white"}`}
+              className={`px-4 py-2 rounded-lg ${
+                tab === t
+                  ? "bg-white text-black shadow"
+                  : "bg-white/30 text-white"
+              }`}
             >
               {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
@@ -162,8 +176,14 @@ const Home = () => {
                 onClick={() => navigate(path)}
                 className="bg-white/90 rounded-2xl shadow p-6 flex flex-col items-center cursor-pointer hover:scale-105 transition"
               >
-                <img src={image} alt={name} className="w-28 h-28 object-contain" />
-                <p className="mt-4 text-lg font-semibold text-gray-800 text-center">{name}</p>
+                <img
+                  src={image}
+                  alt={name}
+                  className="w-28 h-28 object-contain"
+                />
+                <p className="mt-4 text-lg font-semibold text-gray-800 text-center">
+                  {name}
+                </p>
               </div>
             ))}
           </div>
@@ -174,8 +194,8 @@ const Home = () => {
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold text-gray-800">Top Players</h2>
                 <select
-                  value={gameBoard.game}
-                  onChange={(e) => changeGame(e.target.value)}
+                  value={selectedGame}
+                  onChange={(e) => setSelectedGame(e.target.value)}
                   className="border rounded px-3 py-1"
                 >
                   {games.map((g) => (
@@ -196,21 +216,34 @@ const Home = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {gameBoard.rows.length === 0 ? (
+                    {topRows.length === 0 ? (
                       <tr>
                         <td colSpan={3} className="py-6 px-4 text-center">
                           No data
                         </td>
                       </tr>
                     ) : (
-                      gameBoard.rows.slice(0, 10).map((u, i) => (
-                        <tr key={u._id ?? `${u.username}-${i}`} className="border-b hover:bg-gray-100">
+                      topRows.slice(0, 10).map((u, i) => (
+                        <tr
+                          key={u._id ?? `${u.username}-${i}`}
+                          className="border-b hover:bg-gray-100"
+                        >
                           <td className="py-3 px-4 flex items-center gap-2">
-                            {i < 3 && <img src={badgeUrls[i]} alt={`badge-${i}`} className="w-6 h-6" />}
+                            {i < 3 && (
+                              <img
+                                src={badgeUrls[i]}
+                                alt={`badge-${i}`}
+                                className="w-6 h-6"
+                              />
+                            )}
                             {i + 1}
                           </td>
-                          <td className="py-3 px-4 font-semibold">{u.username}</td>
-                          <td className="py-3 px-4">{displayScore(u, gameBoard.game)}</td>
+                          <td className="py-3 px-4 font-semibold">
+                            {u.username}
+                          </td>
+                          <td className="py-3 px-4">
+                            {displayScore(u, selectedGame)}
+                          </td>
                         </tr>
                       ))
                     )}
@@ -249,10 +282,18 @@ const Home = () => {
                       globalBoard.map((u) => (
                         <tr key={u._id} className="border-b last:border-0">
                           <td className="py-2 px-2">{u.username}</td>
-                          <td className="py-2 px-2">{u.emojiGameHighScore ?? "-"}</td>
-                          <td className="py-2 px-2">{u.memoryMatrixHighScore ?? "-"}</td>
-                          <td className="py-2 px-2">{u.cardFlipGameHighScore ?? "-"}</td>
-                          <td className="py-2 px-2">{u.rockPaperScissorHighScore ?? "-"}</td>
+                          <td className="py-2 px-2">
+                            {u.emojiGameHighScore ?? "-"}
+                          </td>
+                          <td className="py-2 px-2">
+                            {u.memoryMatrixHighScore ?? "-"}
+                          </td>
+                          <td className="py-2 px-2">
+                            {u.cardFlipGameHighScore ?? "-"}
+                          </td>
+                          <td className="py-2 px-2">
+                            {u.rockPaperScissorHighScore ?? "-"}
+                          </td>
                         </tr>
                       ))
                     )}
@@ -268,3 +309,4 @@ const Home = () => {
 };
 
 export default Home;
+
