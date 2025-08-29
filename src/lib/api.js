@@ -1,18 +1,21 @@
-const API_BASE = import.meta?.env?.VITE_API_URL?.replace(/\/$/, '') || 'http://localhost:5000';
+// Set API base URL from environment or use your deployed URL as fallback
+const API_BASE = (import.meta?.env?.VITE_API_URL || 'https://minigames-backend-1.onrender.com').replace(/\/$/, '');
 const API_PREFIX = '/api/v1';
 
-export async function apiRequest(path, { method = 'GET', body } = {}) {
+async function apiRequest(path, { method = 'GET', body } = {}) {
   const res = await fetch(`${API_BASE}${API_PREFIX}${path}`, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    headers: body && { 'Content-Type': 'application/json' },
+    body: body && JSON.stringify(body),
     credentials: 'include'
   });
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || 'Request failed');
   return data;
 }
 
+// API Endpoints
 export const auth = {
   register: (username, password) => apiRequest('/auth/register', { method: 'POST', body: { username, password } }),
   login: (username, password) => apiRequest('/auth/login', { method: 'POST', body: { username, password } }),
