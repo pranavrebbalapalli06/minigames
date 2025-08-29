@@ -21,16 +21,16 @@ const Home = () => {
   ];
 
   const badgeUrls = [
-    "https://res.cloudinary.com/dje6kfwo1/image/upload/v1756444933/ChatGPT_Image_Aug_29_2025_10_51_48_AM_wcyb69.png", // gold
-    "https://res.cloudinary.com/dje6kfwo1/image/upload/v1756444932/ChatGPT_Image_Aug_29_2025_10_51_27_AM_en6qsf.png", // silver
-    "https://res.cloudinary.com/dje6kfwo1/image/upload/v1756445156/ChatGPT_Image_Aug_29_2025_10_55_44_AM_e74vrh.png", // bronze
+    "https://res.cloudinary.com/dje6kfwo1/image/upload/v1756444933/ChatGPT_Image_Aug_29_2025_10_51_48_AM_wcyb69.png",
+    "https://res.cloudinary.com/dje6kfwo1/image/upload/v1756444932/ChatGPT_Image_Aug_29_2025_10_51_27_AM_en6qsf.png",
+    "https://res.cloudinary.com/dje6kfwo1/image/upload/v1756445156/ChatGPT_Image_Aug_29_2025_10_55_44_AM_e74vrh.png",
   ];
 
   const refetchBoards = () => {
-    leaderboard.all().then(d => setGlobalBoard(d.data || []));
-    leaderboard.game(gameBoard.game, 10).then(d =>
-      setGameBoard(prev => ({ ...prev, rows: d.data || [] }))
-    );
+    leaderboard.all().then(d => setGlobalBoard(d.data || [])).catch(() => {});
+    leaderboard.game(gameBoard.game, 10)
+      .then(d => setGameBoard(prev => ({ ...prev, rows: d.data || [] })))
+      .catch(() => {});
   };
 
   useEffect(() => {
@@ -43,28 +43,46 @@ const Home = () => {
     return () => window.removeEventListener("mg-leaderboard-updated", handler);
   }, [tab, gameBoard.game]);
 
-  // --- Sorting helpers (simple + safe) ---
-  const scoreFor = (u, game) => {
-    const num = (v) => (v === null || v === undefined || v === "" ? null : Number(v));
-    switch (game) {
-      case "emojigame": return num(u.emojiGameHighScore);            // lower is better
-      case "cardflipgame": return num(u.cardFlipGameHighScore);      // lower is better
-      case "memorymatrix": return num(u.memoryMatrixHighScore);      // higher is better
-      case "rockpaperscissor": return num(u.rockPaperScissorHighScore); // higher is better
-      default: return null;
+  // --- Robust parsing and sorting ---
+  const parseValue = (v) => {
+    if (v === null || v === undefined || v === "") return null;
+    if (typeof v === "number") return Number.isFinite(v) ? v : null;
+    if (typeof v === "string") {
+      const s = v.trim();
+      // mm:ss or m:ss => convert to seconds
+      if (/^\d+:\d{1,2}$/.test(s)) {
+        const [min, sec] = s.split(":").map(Number);
+        if (!Number.isNaN(min) && !Number.isNaN(sec)) return min * 60 + sec;
+      }
+      // strip non-numeric except dot and minus, then parse
+      const cleaned = s.replace(/[^0-9.\-]/g, "");
+      const n = Number(cleaned);
+      return Number.isNaN(n) ? null : n;
     }
+    return null;
   };
+
+  const scoreKeyFor = {
+    emojigame: "emojiGameHighScore",
+    memorymatrix: "memoryMatrixHighScore",
+    cardflipgame: "cardFlipGameHighScore",
+    rockpaperscissor: "rockPaperScissorHighScore",
+  };
+
+  const scoreFor = (u, game) => parseValue(u?.[scoreKeyFor[game]]);
+
+  // Which games treat lower as better (time-based)
   const lowerIsBetter = ["emojigame", "cardflipgame"].includes(gameBoard.game);
+
+  // sortedRows: push null/missing to bottom, then sort correctly
   const sortedRows = [...(gameBoard.rows || [])].sort((a, b) => {
     const aS = scoreFor(a, gameBoard.game);
     const bS = scoreFor(b, gameBoard.game);
 
-    // Push empty scores to the bottom
     if (aS === null && bS === null) return 0;
     if (aS === null) return 1;
     if (bS === null) return -1;
 
-    // Time games: ascending (lower is better). Others: descending (higher is better).
     return lowerIsBetter ? aS - bS : bS - aS;
   });
 
@@ -74,7 +92,7 @@ const Home = () => {
       <BackgroundBeamsWithCollision className="absolute inset-0 -z-10" />
       <TargetCursor spinDuration={2} hideDefaultCursor />
 
-      {/* User Menu (polished but simple) */}
+      {/* User Menu */}
       <div className="absolute top-4 right-4 z-10 bg-white/90 rounded-full px-4 py-2 shadow hover:shadow-xl transition">
         <UserMenu />
       </div>
@@ -137,12 +155,15 @@ const Home = () => {
                 </thead>
                 <tbody>
                   {sortedRows.map((u, i) => {
+                    const raw = u?.[scoreKeyFor[gameBoard.game]];
+                    const parsed = scoreFor(u, gameBoard.game);
+                    // display raw if present (0 included), otherwise show parsed number or '-'
                     const displayScore =
-                      scoreFor(u, gameBoard.game) ??
-                      u.emojiGameHighScore ??
-                      u.memoryMatrixHighScore ??
-                      u.cardFlipGameHighScore ??
-                      u.rockPaperScissorHighScore;
+                      raw !== null && raw !== undefined && raw !== ""
+                        ? raw
+                        : parsed === null
+                        ? "-"
+                        : parsed;
                     return (
                       <tr key={u._id} className="border-b hover:bg-gray-100">
                         <td className="py-3 px-4 flex items-center gap-2">
