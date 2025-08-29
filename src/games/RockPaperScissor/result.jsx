@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const images = {
@@ -22,8 +22,22 @@ const RPSResult = () => {
 
   const { text, button, emoji } = resultConfig[state?.result] || resultConfig.draw;
 
-  // Score should persist until user leaves to "/"
-  const score = state?.score ?? parseInt(sessionStorage.getItem('rpsScore') || '0', 10);
+  // Load existing score or start from 0
+  const [score, setScore] = useState(() => {
+    return parseInt(sessionStorage.getItem('rpsScore') || '0', 10);
+  });
+
+  // Update score when the result changes
+  useEffect(() => {
+    if (!state?.result) return;
+
+    let newScore = score;
+    if (state.result === 'win') newScore += 1;
+    else if (state.result === 'lose') newScore -= 1;
+
+    setScore(newScore);
+    sessionStorage.setItem('rpsScore', newScore.toString());
+  }, [state?.result]);
 
   return (
     <div className="bg-[#1e3555] min-h-screen text-white flex flex-col items-center py-10">
@@ -61,7 +75,7 @@ const RPSResult = () => {
       {/* Result Text */}
       <p className="text-xl font-bold my-2">{text}</p>
 
-      {/* Button */}
+      {/* Play Again Button */}
       <button
         onClick={() => navigate('/rock-paper-scissor')}
         className="mt-2 bg-white text-[#1e3555] px-6 py-2 rounded font-semibold"
@@ -69,7 +83,7 @@ const RPSResult = () => {
         {button}
       </button>
 
-      {/* Back to home clears the score */}
+      {/* Exit Button */}
       <button
         onClick={() => {
           sessionStorage.removeItem('rpsScore');
