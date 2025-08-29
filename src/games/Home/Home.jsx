@@ -187,7 +187,8 @@ const Home = () => {
                         <td colSpan={3} className="py-6 px-4 text-center">No data</td>
                       </tr>
                     ) : (
-                      gameBoard.rows.map((u, i) => (
+                      // show only top 10 players after sorting
+                      gameBoard.rows.slice(0, 10).map((u, i) => (
                         <tr key={u._id ?? `${u.username}-${i}`} className="border-b hover:bg-gray-100">
                           <td className="py-3 px-4 flex items-center gap-2">
                             {i < 3 && <img src={badgeUrls[i]} alt={`badge-${i}`} className="w-6 h-6" />}
