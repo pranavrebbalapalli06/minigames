@@ -69,14 +69,20 @@ export default function RockPaperScissors() {
 
     const newScore = score + scoreChange;
     setScore(newScore);
+    sessionStorage.setItem("rpsScore", newScore);
 
     const u = storage.getUsername();
-    if (u && (bestScore === null || newScore > bestScore)) {
-      setBestScore(newScore);
+    if (u) {
+      // Update server with current score every play
       scores
         .update(u, "rockpaperscissor", newScore)
         .then(() => window.dispatchEvent(new CustomEvent("mg-leaderboard-updated")))
         .catch(() => {});
+    }
+
+    // Update bestScore if exceeded
+    if (bestScore === null || newScore > bestScore) {
+      setBestScore(newScore);
     }
 
     navigate("/rock-paper-scissor/result", {
@@ -134,9 +140,12 @@ export default function RockPaperScissors() {
           <div className="bg-white text-[#1e3555] rounded-2xl shadow-xl p-6 w-96 relative">
             <h2 className="text-2xl font-bold mb-4 text-center">How to Play</h2>
             <ol className="list-decimal list-inside space-y-2 text-left">
-              <li><strong>Choose one</strong>: Rock 🪨, Paper 📄, or Scissors ✂️.</li>
+              <li>
+                <strong>Choose one</strong>: Rock 🪨, Paper 📄, or Scissors ✂️.
+              </li>
               <li>The <strong>computer chooses</strong> one at random.</li>
-              <li><strong>Compare choices</strong>:
+              <li>
+                <strong>Compare choices</strong>:
                 <ul className="list-disc list-inside ml-5 mt-1 space-y-1">
                   <li>Rock beats Scissor 🪨 x ✂️</li>
                   <li>Scissor beats Paper ✂️ x 📄</li>
@@ -144,7 +153,9 @@ export default function RockPaperScissors() {
                 </ul>
               </li>
               <li>If both choose the same → <strong>Draw</strong> 🔄.</li>
-              <li><strong>Winner gets 1 point</strong>, loser loses 1 point.</li>
+              <li>
+                <strong>Winner gets 1 point</strong>, loser loses 1 point.
+              </li>
             </ol>
             <button
               onClick={() => setShowRules(false)}
