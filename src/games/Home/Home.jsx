@@ -202,6 +202,10 @@ const Home = () => {
                 </table>
               </div>
             </section>
+            <h2 class="text-center text-2xl font-bold mt-4 mb-6 text-white bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 p-3 rounded-lg shadow-lg">
+  🚀 Play Hard, Rank Higher – Your Spot Awaits on the Leaderboard! 🏅
+</h2>
+
 
             {/* All Players */}
             <section className="bg-white/90 rounded-2xl p-4 shadow">
