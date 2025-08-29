@@ -12,7 +12,6 @@ export default function RockPaperScissors() {
   useEffect(() => {
     sessionStorage.setItem("rpsScore", "0");
     return () => {
-      // Optional: ensure no lingering intermediate state
       sessionStorage.removeItem("rpsScore");
     };
   }, []);
@@ -45,31 +44,41 @@ export default function RockPaperScissors() {
     let scoreChange = 0;
 
     if (choice.name === compChoice.name) {
+      // Draw → no score change
       result = "draw";
+      scoreChange = 0;
     } else if (
       (choice.name === "rock" && compChoice.name === "scissor") ||
       (choice.name === "paper" && compChoice.name === "rock") ||
       (choice.name === "scissor" && compChoice.name === "paper")
     ) {
+      // Win → +1
       result = "win";
-      scoreChange = scoreChange + 1;
+      scoreChange = 1;
     } else {
+      // Lose → -1
       result = "lose";
-      scoreChange = scoreChange - 1;
+      scoreChange = -1;
     }
 
+    // Update score in session storage
     const currentScore = parseInt(sessionStorage.getItem("rpsScore") || "0", 10);
     const updatedScore = currentScore + scoreChange;
     sessionStorage.setItem("rpsScore", String(updatedScore));
 
+    // Update best score only if greater than current best
     const u = storage.getUsername();
     if (u && (bestScore === null || updatedScore > bestScore)) {
       setBestScore(updatedScore);
-      scores.update(u, 'rockpaperscissor', updatedScore).then(()=>{
-        window.dispatchEvent(new CustomEvent('mg-leaderboard-updated'));
-      }).catch(() => {});
+      scores
+        .update(u, "rockpaperscissor", updatedScore)
+        .then(() => {
+          window.dispatchEvent(new CustomEvent("mg-leaderboard-updated"));
+        })
+        .catch(() => {});
     }
 
+    // Navigate to result page with details
     navigate("/rock-paper-scissor/result", {
       state: {
         result,
