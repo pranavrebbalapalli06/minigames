@@ -22,11 +22,10 @@ const badgeUrls = [
 ];
 
 const parseScore = (v) => {
-  // returns numeric value (seconds for mm:ss) or null if not numeric
   if (v === null || v === undefined || v === "") return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
   const s = String(v).trim();
-  // mm:ss -> seconds
+  // mm:ss → seconds
   if (/^\d+:\d{1,2}$/.test(s)) {
     const [m, sec] = s.split(":").map(Number);
     if (!Number.isNaN(m) && !Number.isNaN(sec)) return m * 60 + sec;
@@ -40,11 +39,9 @@ const parseScore = (v) => {
 
 const getScoreValue = (row, game) => {
   const key = scoreKeyFor[game];
-  // prefer the canonical key, then 'score', then any numeric-like field
   if (row == null) return null;
   if (row[key] !== undefined) return parseScore(row[key]);
   if (row.score !== undefined) return parseScore(row.score);
-  // fallback: find first numeric-like field
   for (const v of Object.values(row)) {
     const p = parseScore(v);
     if (p !== null) return p;
@@ -52,15 +49,20 @@ const getScoreValue = (row, game) => {
   return null;
 };
 
-const sortDesc = (rows = [], game) =>
+// ✅ Smart sorter
+const sortByGame = (rows = [], game) =>
   [...rows].sort((a, b) => {
     const A = getScoreValue(a, game);
     const B = getScoreValue(b, game);
-    // both missing -> keep original order (or by username)
+
     if (A === null && B === null) return 0;
-    if (A === null) return 1; // push missing to bottom
+    if (A === null) return 1; // missing score → push down
     if (B === null) return -1;
-    return B - A; // descending
+
+    if (game === "emojigame" || game === "cardflipgame") {
+      return A - B; // ascending (smaller = better)
+    }
+    return B - A; // descending (bigger = better)
   });
 
 /* --- component --- */
@@ -77,8 +79,8 @@ const Home = () => {
     { key: "rockpaperscissor", label: "Rock Paper Scissor" },
   ];
 
+  // Fetch global leaderboard
   useEffect(() => {
-    // fetch global once when leaderboard tab opens
     if (tab !== "leaderboard") return;
     let cancelled = false;
     leaderboard
@@ -90,8 +92,8 @@ const Home = () => {
     return () => (cancelled = true);
   }, [tab]);
 
+  // Fetch per-game leaderboard
   useEffect(() => {
-    // fetch per-game rows when leaderboard tab opens or game changes
     if (tab !== "leaderboard") return;
     let cancelled = false;
     const g = gameBoard.game || "emojigame";
@@ -100,7 +102,7 @@ const Home = () => {
       .then((d) => {
         if (cancelled) return;
         const rows = d?.data ?? [];
-        setGameBoard({ game: g, rows: sortDesc(rows, g) });
+        setGameBoard({ game: g, rows: sortByGame(rows, g) });
       })
       .catch(() => {
         if (!cancelled) setGameBoard((p) => ({ ...p, rows: [] }));
@@ -123,6 +125,7 @@ const Home = () => {
       <BackgroundBeamsWithCollision className="fixed inset-0 -z-10" />
       <TargetCursor spinDuration={2} hideDefaultCursor={true} />
 
+      {/* User menu */}
       <div className="absolute top-4 right-4 z-10 bg-white/90 rounded-full px-4 py-2 shadow hover:shadow-xl transition">
         <UserMenu />
       </div>
@@ -132,6 +135,7 @@ const Home = () => {
           Mini Games
         </h1>
 
+        {/* Tabs */}
         <div className="mb-8 flex gap-4">
           {["games", "leaderboard"].map((t) => (
             <button
@@ -145,6 +149,7 @@ const Home = () => {
         </div>
 
         {tab === "games" ? (
+          /* Games Grid */
           <div className="grid sm:grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-5xl px-2 sm:px-4">
             {homeList.map(({ id, name, image, path }) => (
               <div
@@ -163,7 +168,11 @@ const Home = () => {
             <section className="bg-white/90 rounded-2xl p-4 shadow">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold text-gray-800">Top Players</h2>
-                <select value={gameBoard.game} onChange={(e) => changeGame(e.target.value)} className="border rounded px-3 py-1">
+                <select
+                  value={gameBoard.game}
+                  onChange={(e) => changeGame(e.target.value)}
+                  className="border rounded px-3 py-1"
+                >
                   {games.map((g) => (
                     <option key={g.key} value={g.key}>
                       {g.label}
@@ -184,10 +193,11 @@ const Home = () => {
                   <tbody>
                     {gameBoard.rows.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="py-6 px-4 text-center">No data</td>
+                        <td colSpan={3} className="py-6 px-4 text-center">
+                          No data
+                        </td>
                       </tr>
                     ) : (
-                      // show only top 10 players after sorting
                       gameBoard.rows.slice(0, 10).map((u, i) => (
                         <tr key={u._id ?? `${u.username}-${i}`} className="border-b hover:bg-gray-100">
                           <td className="py-3 px-4 flex items-center gap-2">
@@ -203,10 +213,11 @@ const Home = () => {
                 </table>
               </div>
             </section>
-            <h2 class="text-center text-2xl font-bold mt-4 mb-6 text-white bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 p-3 rounded-lg shadow-lg">
-  🚀 Play Hard, Rank Higher – Your Spot Awaits on the Leaderboard! 🏅
-</h2>
 
+            {/* Leaderboard banner */}
+            <h2 className="text-center text-2xl font-bold mt-4 mb-6 text-white bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 p-3 rounded-lg shadow-lg">
+              🚀 Play Hard, Rank Higher – Your Spot Awaits on the Leaderboard! 🏅
+            </h2>
 
             {/* All Players */}
             <section className="bg-white/90 rounded-2xl p-4 shadow">
@@ -225,7 +236,9 @@ const Home = () => {
                   <tbody>
                     {globalBoard.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-6 px-4 text-center">No players yet</td>
+                        <td colSpan={5} className="py-6 px-4 text-center">
+                          No players yet
+                        </td>
                       </tr>
                     ) : (
                       globalBoard.map((u) => (
