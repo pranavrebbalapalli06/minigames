@@ -56,13 +56,18 @@ const sortByGame = (rows = [], game) =>
     const B = getScoreValue(b, game);
 
     if (A === null && B === null) return 0;
-    if (A === null) return 1; // missing score → push down
+    if (A === null) return 1;
     if (B === null) return -1;
 
     if (game === "emojigame" || game === "cardflipgame") {
-      return A - B; // ascending (smaller = better)
+      // push zeros to bottom
+      if (A === 0 && B !== 0) return 1;
+      if (B === 0 && A !== 0) return -1;
+      return A - B; // ascending for non-zero
     }
-    return B - A; // descending (bigger = better)
+
+    // score-based → descending
+    return B - A;
   });
 
 /* --- component --- */
